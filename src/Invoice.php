@@ -932,6 +932,10 @@ class Invoice {
      * @return InvoiceTotals Invoice totals
      */
     public function getTotals(): InvoiceTotals {
+        if (! empty($this->totals)) {
+            return $this->totals;
+        }
+
         return InvoiceTotals::fromInvoice($this);
     }
 
