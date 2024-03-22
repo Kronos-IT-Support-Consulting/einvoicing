@@ -289,7 +289,7 @@ class InvoiceLine {
      * @return self                Invoice line instance
      */
     public function setBaseQuantity(float $baseQuantity): self {
-        $this->baseQuantity = $baseQuantity != 0 ? $baseQuantity : 1.0;
+        $this->baseQuantity = $baseQuantity != 0.0 ? $baseQuantity : 1.0;
         return $this;
     }
 
