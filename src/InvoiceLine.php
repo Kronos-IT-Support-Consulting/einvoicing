@@ -21,7 +21,7 @@ class InvoiceLine {
     protected $quantity = 1;
     protected $unit = "C62"; // TODO: add constants
     protected $price = null;
-    protected $baseQuantity = 1;
+    protected $baseQuantity = 1.0;
 
     use AllowanceOrChargeTrait;
     use AttributesTrait;
