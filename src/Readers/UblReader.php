@@ -30,7 +30,7 @@ class UblReader extends AbstractReader {
      * @inheritdoc
      * @throws InvalidArgumentException if failed to parse XML
      */
-    public function import(string $document, bool $readTotals = true): Invoice {
+    public function import(string $document, bool $readTotals = false): Invoice {
         $invoice = new Invoice();
         $totals = new InvoiceTotals();
 
