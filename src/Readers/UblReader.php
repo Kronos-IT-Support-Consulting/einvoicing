@@ -235,12 +235,12 @@ class UblReader extends AbstractReader {
             $taxSubtotal = $taxTotalNode->get("{{$cac}}TaxSubtotal");
             if ($taxSubtotal !== null) {
                 $vatBreakdown = new VatBreakdown();
-                $vatBreakdown->taxableAmount = (float) $taxSubtotal->get("{{$cbc}}TaxableAmount")->asText();
-                $vatBreakdown->taxAmount = (float) $taxSubtotal->get("{{$cbc}}TaxAmount")->asText();
-                $vatBreakdown->category = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}ID")->asText();
-                $vatBreakdown->rate = (float) $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}Percent")->asText();
-                $vatBreakdown->exemptionReason = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}TaxExemptionReason")->asText();
-                $vatBreakdown->exemptionReasonCode = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}TaxExemptionReasonCode")->asText();
+                $vatBreakdown->taxableAmount = (float) $taxSubtotal->get("{{$cbc}}TaxableAmount")?->asText();
+                $vatBreakdown->taxAmount = (float) $taxSubtotal->get("{{$cbc}}TaxAmount")?->asText();
+                $vatBreakdown->category = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}ID")?->asText();
+                $vatBreakdown->rate = (float) $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}Percent")?->asText();
+                $vatBreakdown->exemptionReason = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}TaxExemptionReason")?->asText();
+                $vatBreakdown->exemptionReasonCode = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}TaxExemptionReasonCode")?->asText();
 
                 $totals->vatBreakdown[] = $vatBreakdown;
 
