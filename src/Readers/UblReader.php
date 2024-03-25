@@ -235,12 +235,24 @@ class UblReader extends AbstractReader {
             $taxSubtotal = $taxTotalNode->get("{{$cac}}TaxSubtotal");
             if ($taxSubtotal !== null) {
                 $vatBreakdown = new VatBreakdown();
-                $vatBreakdown->taxableAmount = (float) $taxSubtotal->get("{{$cbc}}TaxableAmount")?->asText();
-                $vatBreakdown->taxAmount = (float) $taxSubtotal->get("{{$cbc}}TaxAmount")?->asText();
-                $vatBreakdown->category = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}ID")?->asText();
-                $vatBreakdown->rate = (float) $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}Percent")?->asText();
-                $vatBreakdown->exemptionReason = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}TaxExemptionReason")?->asText();
-                $vatBreakdown->exemptionReasonCode = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}TaxExemptionReasonCode")?->asText();
+                if (($taxableAmountNode = $taxSubtotal->get("{{$cbc}}TaxableAmount")) !== null) {
+                    $vatBreakdown->taxableAmount = (float) $taxableAmountNode->asText();
+                }
+                if (($taxAmountNode = $taxSubtotal->get("{{$cbc}}TaxAmount")) !== null) {
+                    $vatBreakdown->taxAmount = (float) $taxAmountNode->asText();
+                }
+                if (($categoryNode = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}ID")) !== null) {
+                    $vatBreakdown->category = $categoryNode->asText();
+                }
+                if (($rateNode = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}Percent")) !== null) {
+                    $vatBreakdown->rate = (float) $rateNode->asText();
+                }
+                if (($exemptionReasonNode = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}TaxExemptionReason")) !== null) {
+                    $vatBreakdown->exemptionReason = $exemptionReasonNode->asText();
+                }
+                if (($exemptionReasonCodeNode = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}TaxExemptionReasonCode")) !== null) {
+                    $vatBreakdown->exemptionReasonCode = $exemptionReasonCodeNode->asText();
+                }
 
                 $totals->vatBreakdown[] = $vatBreakdown;
 
