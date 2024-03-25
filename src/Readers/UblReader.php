@@ -10,6 +10,8 @@ use Einvoicing\Identifier;
 use Einvoicing\Invoice;
 use Einvoicing\InvoiceLine;
 use Einvoicing\InvoiceReference;
+use Einvoicing\Models\InvoiceTotals;
+use Einvoicing\Models\VatBreakdown;
 use Einvoicing\Party;
 use Einvoicing\Payments\Card;
 use Einvoicing\Payments\Mandate;
@@ -28,8 +30,9 @@ class UblReader extends AbstractReader {
      * @inheritdoc
      * @throws InvalidArgumentException if failed to parse XML
      */
-    public function import(string $document): Invoice {
+    public function import(string $document, bool $readTotals = true): Invoice {
         $invoice = new Invoice();
+        $totals = new InvoiceTotals();
 
         // Load XML document
         $xml = UXML::fromString($document);
@@ -118,12 +121,14 @@ class UblReader extends AbstractReader {
         $currencyNode = $xml->get("{{$cbc}}DocumentCurrencyCode");
         if ($currencyNode !== null) {
             $invoice->setCurrency($currencyNode->asText());
+            $totals->currency = $invoice->getCurrency();
         }
 
         // BT-6: VAT accounting currency code
         $vatCurrencyNode = $xml->get("{{$cbc}}TaxCurrencyCode");
         if ($vatCurrencyNode !== null) {
             $invoice->setVatCurrency($vatCurrencyNode->asText());
+            $totals->vatCurrency = $invoice->getVatCurrency();
         }
 
         // BT-19: Buyer accounting reference
@@ -227,31 +232,87 @@ class UblReader extends AbstractReader {
 
         // BT-111: Total VAT amount in accounting currency
         foreach ($xml->getAll("{{$cac}}TaxTotal") as $taxTotalNode) {
-            if ($taxTotalNode->get("{{$cac}}TaxSubtotal") !== null) {
+            $taxSubtotal = $taxTotalNode->get("{{$cac}}TaxSubtotal");
+            if ($taxSubtotal !== null) {
+                $vatBreakdown = new VatBreakdown();
+                $vatBreakdown->taxableAmount = (float) $taxSubtotal->get("{{$cbc}}TaxableAmount")->asText();
+                $vatBreakdown->taxAmount = (float) $taxSubtotal->get("{{$cbc}}TaxAmount")->asText();
+                $vatBreakdown->category = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}ID")->asText();
+                $vatBreakdown->rate = (float) $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}Percent")->asText();
+                $vatBreakdown->exemptionReason = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}TaxExemptionReason")->asText();
+                $vatBreakdown->exemptionReasonCode = $taxSubtotal->get("{{$cac}}TaxCategory/{{$cbc}}TaxExemptionReasonCode")->asText();
+
+                $totals->vatBreakdown[] = $vatBreakdown;
+
                 // The other tax total node, then
                 continue;
             }
             $taxAmountNode = $taxTotalNode->get("{{$cbc}}TaxAmount");
             if ($taxAmountNode !== null) {
                 $invoice->setCustomVatAmount((float) $taxAmountNode->asText());
+                $totals->customVatAmount = (float) $taxAmountNode->asText();
             }
+        }
+
+        // BT-106: Line Extension Amount
+        $lineExtensionAmount = $xml->get("{{$cac}}LegalMonetaryTotal/{{$cbc}}LineExtensionAmount");
+        if ($lineExtensionAmount !== null) {
+            $totals->netAmount = (float) $lineExtensionAmount->asText();
+        }
+
+        // BT-107: Allowance Total Amount
+        $allowanceTotalAmount = $xml->get("{{$cac}}LegalMonetaryTotal/{{$cbc}}AllowanceTotalAmount");
+        if ($allowanceTotalAmount !== null) {
+            $totals->allowancesAmount = (float) $allowanceTotalAmount->asText();
+        }
+
+        // BT-108: Charge Total Amount
+        $chargeTotalAmount = $xml->get("{{$cac}}LegalMonetaryTotal/{{$cbc}}ChargeTotalAmount");
+        if ($chargeTotalAmount !== null) {
+            $totals->chargesAmount = (float) $chargeTotalAmount->asText();
+        }
+
+        // BT-109: Tax Exclusive Amount
+        $taxExclusiveAmount = $xml->get("{{$cac}}LegalMonetaryTotal/{{$cbc}}TaxExclusiveAmount");
+        if ($taxExclusiveAmount !== null) {
+            $totals->taxExclusiveAmount = (float) $taxExclusiveAmount->asText();
+        }
+
+        // BT-112: Tax Inclusive Amount
+        $taxInclusiveAmount = $xml->get("{{$cac}}LegalMonetaryTotal/{{$cbc}}TaxInclusiveAmount");
+        if ($taxInclusiveAmount !== null) {
+            $totals->taxInclusiveAmount = (float) $taxInclusiveAmount->asText();
+        }
+
+        // BT-115: Payable Amount
+        $payableAmount = $xml->get("{{$cac}}LegalMonetaryTotal/{{$cbc}}PayableAmount");
+        if ($payableAmount !== null) {
+            $totals->payableAmount = (float) $payableAmount->asText();
         }
 
         // BT-113: Paid amount
         $paidAmountNode = $xml->get("{{$cac}}LegalMonetaryTotal/{{$cbc}}PrepaidAmount");
         if ($paidAmountNode !== null) {
             $invoice->setPaidAmount((float) $paidAmountNode->asText());
+            $totals->paidAmount = (float) $paidAmountNode->asText();
         }
 
         // BT-114: Rounding amount
         $roundingAmountNode = $xml->get("{{$cac}}LegalMonetaryTotal/{{$cbc}}PayableRoundingAmount");
         if ($roundingAmountNode !== null) {
             $invoice->setRoundingAmount((float) $roundingAmountNode->asText());
+            $totals->roundingAmount = (float) $roundingAmountNode->asText();
         }
+
+        $totals->vatAmount = $totals->taxInclusiveAmount - $totals->taxExclusiveAmount;
 
         // Invoice lines
         foreach ($xml->getAll("{{$cac}}InvoiceLine | {{$cac}}CreditNoteLine") as $node) {
             $invoice->addLine($this->parseInvoiceLine($node, $taxExemptions));
+        }
+
+        if ($readTotals) {
+            $invoice->setTotals($totals);
         }
 
         return $invoice;
