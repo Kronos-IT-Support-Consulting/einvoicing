@@ -114,6 +114,9 @@ class UblWriter extends AbstractWriter {
         // Order reference node
         $this->addOrderReferenceNode($xml, $invoice);
 
+        // Project reference node
+        $this->addProjectReferenceNode($xml, $invoice);
+
         // BG-3: Preceding invoice reference
         foreach ($invoice->getPrecedingInvoiceReferences() as $invoiceReference) {
             $invoiceDocumentReferenceNode = $xml->add('cac:BillingReference')->add('cac:InvoiceDocumentReference');
