@@ -18,9 +18,6 @@
     <cac:OrderReference>
         <cbc:ID>854777</cbc:ID>
     </cac:OrderReference>
-    <cac:ProjectReference>
-        <cbc:ID>123projref</cbc:ID>
-    </cac:ProjectReference>
     <cac:BillingReference>
         <cac:InvoiceDocumentReference>
             <cbc:ID>INV-122</cbc:ID>
