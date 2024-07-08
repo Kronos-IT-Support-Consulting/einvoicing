@@ -108,11 +108,11 @@ class UblWriter extends AbstractWriter {
         // BG-14: Invoice period
         $this->addPeriodNode($xml, $invoice);
 
-        // Order reference node
-        $this->addOrderReferenceNode($xml, $invoice);
-
         // Project reference node
         $this->addProjectReferenceNode($xml, $invoice);
+
+        // Order reference node
+        $this->addOrderReferenceNode($xml, $invoice);
 
         // BG-3: Preceding invoice reference
         foreach ($invoice->getPrecedingInvoiceReferences() as $invoiceReference) {
