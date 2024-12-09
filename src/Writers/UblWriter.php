@@ -803,7 +803,7 @@ class UblWriter extends AbstractWriter {
             $invoice->getCurrency()
         );
 
-        if ($item->isPercentage()) {
+        if ($item->getBaseAmount()) {
             $this->addAmountNode(
                 $xml,
                 'cbc:BaseAmount',
