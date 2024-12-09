@@ -795,26 +795,21 @@ class UblWriter extends AbstractWriter {
 
         // Percentage
         if ($item->isPercentage()) {
-            $xml->add('cbc:MultiplierFactorNumeric', (string) $item->getAmount());
+            $xml->add('cbc:MultiplierFactorNumeric', (string) $item->getFactorMultiplier());
         }
 
-        // Amount
-        $baseAmount = $atDocumentLevel ?
-            $totals->netAmount :                                 // @phan-suppress-current-line PhanPossiblyUndeclaredProperty
-            $line->getNetAmountBeforeAllowancesCharges() ?? 0.0; // @phan-suppress-current-line PhanPossiblyNonClassMethodCall
         $this->addAmountNode(
             $xml,
             'cbc:Amount',
-            $invoice->round($item->getEffectiveAmount($baseAmount), 'line/allowanceChargeAmount'),
+            $invoice->round($item->getAmount(), 'line/allowanceChargeAmount'),
             $invoice->getCurrency()
         );
 
-        // Base amount
         if ($item->isPercentage()) {
             $this->addAmountNode(
                 $xml,
                 'cbc:BaseAmount',
-                $invoice->round($baseAmount, 'line/netAmount'),
+                $invoice->round((string) $item->getBaseAmount(), 'line/netAmount'),
                 $invoice->getCurrency()
             );
         }
