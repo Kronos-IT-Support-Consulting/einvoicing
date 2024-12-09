@@ -807,7 +807,7 @@ class UblWriter extends AbstractWriter {
             $this->addAmountNode(
                 $xml,
                 'cbc:BaseAmount',
-                $invoice->round((string) $item->getBaseAmount(), 'line/netAmount'),
+                $invoice->round($item->getBaseAmount(), 'line/netAmount'),
                 $invoice->getCurrency()
             );
         }
