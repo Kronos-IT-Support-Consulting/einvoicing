@@ -805,7 +805,7 @@ class UblReader extends AbstractReader {
         $factorNode = $xml->get("{{$cbc}}MultiplierFactorNumeric");
         $amountNode = $xml->get("{{$cbc}}Amount");
         $baseAmountNode = $xml->get("{{$cbc}}BaseAmount");
-        if ($factorNode !== null) {
+        if ($factorNode !== null && $baseAmountNode !== null && $amountNode !== null) {
             $percent = (float) $factorNode->asText();
             $baseAmount = (float) $baseAmountNode->asText();
             $amount = (float) $amountNode->asText();
