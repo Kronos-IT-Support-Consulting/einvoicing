@@ -111,6 +111,9 @@ class UblWriter extends AbstractWriter {
         // Order reference node
         $this->addOrderReferenceNode($xml, $invoice);
 
+        // add Receipt Document Reference
+        $this->addReceiptDocumentReference($xml, $invoice);
+
         // BG-3: Preceding invoice reference
         foreach ($invoice->getPrecedingInvoiceReferences() as $invoiceReference) {
             $invoiceDocumentReferenceNode = $xml->add('cac:BillingReference')->add('cac:InvoiceDocumentReference');
@@ -289,6 +292,22 @@ class UblWriter extends AbstractWriter {
         if ($salesOrderReference !== null) {
             $orderReferenceNode->add('cbc:SalesOrderID', $salesOrderReference);
         }
+    }
+
+    /**
+     * Add order reference node
+     * @param UXML    $parent  Parent element
+     * @param Invoice $invoice Invoice instance
+     */
+    private function addReceiptDocumentReference(UXML $parent, Invoice $invoice) {
+        $receiptDocumentReference = $invoice->getReceiptDocumentReference();
+
+        if ($receiptDocumentReference === null) return;
+
+        $receiptDocumentReferenceNode = $parent->add('cac:ReceiptDocumentReference');
+
+        // BT-15: Receipt Document Reference
+        $receiptDocumentReferenceNode->add('cbc:ID', $receiptDocumentReference);
     }
 
 

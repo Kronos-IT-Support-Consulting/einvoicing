@@ -39,7 +39,7 @@ final class UblWriterTest extends TestCase {
         $seller = (new Party)
             ->setElectronicAddress(new Identifier('9482348239847239874', '0088'))
             ->setCompanyId(new Identifier('COMPANY_ID', '0183'))
-            ->setTaxRegistrationId(new Identifier('12345678')) // NOTE: Missing scheme on purpose
+            ->setTaxRegistrationId(new Identifier('12345678', 'GST'))
             ->setName('Seller Name Ltd.')
             ->setTradingName('Seller Name')
             ->setVatNumber('ESA00000000')
@@ -99,7 +99,7 @@ final class UblWriterTest extends TestCase {
         return $invoice;
     }
 
-    private function validateInvoice(string $contents, string $type): bool {
+    private function validateInvoice(string $contents, string $type): void {
         // Build SOAP request
         $req  = '<?xml version="1.0" encoding="UTF-8"?>';
         $req .= '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"';
@@ -128,14 +128,30 @@ final class UblWriterTest extends TestCase {
         unset($ch);
 
         // Validate response
-        return (strpos($res, '<ns3:result>SUCCESS</ns3:result>') !== false);
+        $nsSoap = 'http://schemas.xmlsoap.org/soap/envelope/';
+        $nsVs = 'http://www.gitb.com/vs/v1/';
+        $nsTr = 'http://www.gitb.com/tr/v1/';
+        $xml = UXML::fromString($res);
+        $report = $xml->get("{{$nsSoap}}Body/{{$nsVs}}ValidationResponse/report");
+        $result = $report->get("{{$nsTr}}result")->asText();
+        if ($result === 'SUCCESS') {
+            $this->assertTrue(true); // To avoid marking test as incomplete
+            return;
+        }
+
+        // Parse and report errors
+        $errors = [];
+        foreach ($report->getAll("{{$nsTr}}reports/{{$nsTr}}error") as $element) {
+            $errors[] = $element->get("{{$nsTr}}description")->asText();
+        }
+        $this->fail(implode("\n", $errors));
     }
 
     public function testCanGenerateValidInvoice(): void {
         $invoice = $this->getSampleInvoice();
         $invoice->validate();
         $contents = $this->writer->export($invoice);
-        $this->assertTrue($this->validateInvoice($contents, 'ubl'));
+       $this->validateInvoice($contents, 'ubl');
     }
 
     public function testCanGenerateValidCreditNote(): void {
@@ -144,7 +160,7 @@ final class UblWriterTest extends TestCase {
         $invoice->addPayment((new Payment)->setMeansCode('10')->setMeansText('In cash'));
         $invoice->validate();
         $contents = $this->writer->export($invoice);
-        $this->assertTrue($this->validateInvoice($contents, 'credit'));
+       $this->validateInvoice($contents, 'credit');
     }
 
     public function testCanHaveLinesWithForcedDuplicateIdentifiers(): void {

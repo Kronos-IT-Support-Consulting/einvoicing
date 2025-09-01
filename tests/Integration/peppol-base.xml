@@ -15,6 +15,9 @@
     <cac:OrderReference>
         <cbc:ID>854777</cbc:ID>
     </cac:OrderReference>
+    <cac:ReceiptDocumentReference>
+        <cbc:ID>P190320</cbc:ID>
+    </cac:ReceiptDocumentReference>
     <cac:BillingReference>
         <cac:InvoiceDocumentReference>
             <cbc:ID>INV-122</cbc:ID>

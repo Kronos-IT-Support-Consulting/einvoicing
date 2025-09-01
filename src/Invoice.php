@@ -254,6 +254,7 @@ class Invoice {
     protected $notes = [];
     protected $buyerReference = null;
     protected $purchaseOrderReference = null;
+    protected $receiptDocumentReference = null;
     protected $despatchDocumentReference = null;
     protected $salesOrderReference = null;
     protected $projectReference = null;
@@ -640,6 +641,26 @@ class Invoice {
      */
     public function setPurchaseOrderReference(?string $purchaseOrderReference): self {
         $this->purchaseOrderReference = $purchaseOrderReference;
+        return $this;
+    }
+
+
+    /**
+     * Get Receipt document reference
+     * @return string|null Receipt document reference
+     */
+    public function getReceiptDocumentReference(): ?string {
+        return $this->receiptDocumentReference;
+    }
+
+
+    /**
+     * Set Receipt document reference
+     * @param  string|null $receiptDocumentReference Receipt Document Reference
+     * @return self                                Invoice instance
+     */
+    public function setReceiptDocumentReference(?string $receiptDocumentReference): self {
+        $this->receiptDocumentReference = $receiptDocumentReference;
         return $this;
     }
 
