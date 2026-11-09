@@ -34,7 +34,7 @@
     "require-dev": {
         "ext-openssl": "*",
         "phan/phan": "*",
-        "phpdocumentor/reflection": "^6.0.0",
+        "phpdocumentor/reflection": "^7.0.0",
         "symfony/phpunit-bridge": "*"
     }
 }
