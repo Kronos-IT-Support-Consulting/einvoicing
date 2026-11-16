@@ -30,8 +30,9 @@ Nothing is merged, pushed or changed unless the arguments (or a follow-up reply)
 
 ## Ground rules
 
-- **Never touch the user's working tree.** The checkout may be on a feature branch with uncommitted work. No `checkout`, `stash`, `reset`, `pull`, `composer install`, `npm install` in the repo dir. Read default-branch files with `git show origin/$BASE:<path>`; search code with `git grep … origin/$BASE`; write changes only in a separate worktree (Step 7).
+- **Never touch the user's working tree.** The checkout may be on a feature branch with uncommitted work. No `checkout`, `stash`, `reset`, `pull`, `composer install`, `npm install` in the repo dir. Read default-branch files with `git show origin/${BASE}:<path>`; search code with `git grep … origin/$BASE`; write changes only in a separate worktree or temp clone (Step 7).
 - All commands must work from any cwd (the cockpit runs this skill against a repo path). Use `git -C "$REPO_DIR"` and `gh -R "$SLUG"`.
+- Snippets must work in **zsh as well as bash**: write `${VAR}:` whenever a variable is followed by a colon (zsh reads `$BASE:c…` as a modifier, so `origin/$BASE:composer.json` becomes `origin/mainomposer.json`), and don't rely on word-splitting — an unquoted variable holding several words stays one argument in zsh (use an array or separate arguments).
 - Never `rm` a path built from a variable. Temp dirs come from `mktemp -d` and are left for the OS to clean.
 - When uncertain, downgrade a verdict (SAFE → REVIEW → RISKY).
 
@@ -78,8 +79,8 @@ For each directory containing a `composer.lock` or `package-lock.json`:
 ```bash
 T=$(mktemp -d)
 for f in composer.json composer.lock package.json package-lock.json; do
-  git -C "$REPO_DIR" cat-file -e "origin/$BASE:$DIR$f" 2>/dev/null \
-    && git -C "$REPO_DIR" show "origin/$BASE:$DIR$f" > "$T/$f"
+  git -C "$REPO_DIR" cat-file -e "origin/${BASE}:${DIR}${f}" 2>/dev/null \
+    && git -C "$REPO_DIR" show "origin/${BASE}:${DIR}${f}" > "$T/$f"
 done
 ( cd "$T" && composer audit --locked --no-plugins --format=json )       # if composer.lock
 ( cd "$T" && npm audit --package-lock-only --json )                     # if package-lock.json
@@ -89,6 +90,12 @@ done
 
 - `composer audit` also lists **abandoned** packages — report them as informational.
 - `yarn.lock` / `pnpm-lock.yaml` can't be audited without installing; rely on 1a for those and say so in the report.
+- **No committed `composer.lock`** (typical for libraries): resolve the default branch's manifest into a throwaway lockfile and audit that —
+  ```bash
+  T=$(mktemp -d); git -C "$REPO_DIR" show "origin/${BASE}:composer.json" > "$T/composer.json"
+  ( cd "$T" && composer update --no-install --no-scripts --no-plugins && composer audit --locked --no-plugins --format=json )
+  ```
+  Label the result as "what a fresh install gets today" (it is not a committed state), and add the consumer-facing check: do the `require` constraints still admit vulnerable versions?
 
 ### 1c. Merge and enrich
 
@@ -98,6 +105,8 @@ Dedupe 1a + 1b by (ecosystem, package, GHSA/CVE). For each vulnerability record:
 - **direct or transitive** — composer: `composer why --locked <pkg>` in `$T`; npm: `npm ls --package-lock-only <pkg>` in `$T`
 - **prod or dev** — `require` vs `require-dev`, `dependencies` vs `devDependencies` (for transitive: what pulls it in)
 - severity (critical / high / moderate / low)
+
+Advisories GitHub doesn't know (typically FriendsOfPHP entries from `composer audit`, with no severity and no Dependabot alert): report them as **unrated**, look up a severity upstream (the project's advisory / CVE record) when that is cheap, and otherwise count them as `moderate` in the summary block — with a note in the report saying how many of the moderate count are unrated.
 
 ### 1d. Config gaps
 
@@ -115,7 +124,7 @@ For each PR extract:
 - **Packages + versions** from the title — formats vary: `chore(deps): bump <pkg> from <a> to <b>`, `Bump <pkg> from <a> to <b>`, `chore(deps-dev): …`, or grouped `Bump the <group> group … with N updates` (packages are listed in the body).
 - **Ecosystem** from the branch: `dependabot/composer/…`, `dependabot/npm_and_yarn/…`, `dependabot/github_actions/…`.
 - **Semver jump**: patch / minor / major (`0.x` minor bumps count as major).
-- **CI** from `statusCheckRollup` — any failing check disqualifies SAFE. Pending checks → note it, don't count as green.
+- **CI** from `statusCheckRollup` — any failing check disqualifies SAFE. Pending checks → note it, don't count as green. An empty rollup means **no CI evidence** — record it as `none`, never as green.
 - **Mergeability** — `CONFLICTING` / `BEHIND` → note it (Step 6 handles rebasing).
 
 ### Per-PR diff analysis
@@ -135,6 +144,7 @@ For each PR:
      ':!vendor' ':!node_modules' ':!*.lock' ':!package-lock.json' ':!public/build'
    ```
    Dev-only deps (`require-dev`, `devDependencies`, `deps-dev` in the title) can't affect production behavior.
+   For library minors, also check inheritance: if the diff adds methods/properties to classes or traits this codebase extends or uses, compare them with same-named members in our subclasses — a visibility or signature clash (e.g. new `protected` method vs. our `private` one) is a fatal error, not a behavior change.
 4. Return: package, old → new, jump, summary of actual changes, which changed symbols this codebase touches, verdict + one-line justification.
 
 ## Step 3 — Cross-reference
@@ -150,13 +160,15 @@ For each vulnerability from Step 1:
   - Dependabot PR was closed/ignored (check `gh pr list -R "$SLUG" --author app/dependabot --state closed --search <pkg>`)
   - unknown — say so
 
-And state the concrete fix: e.g. `composer update <pkg> --with-dependencies`, `npm update <pkg>`, `npm audit fix` (never `--force`), bump parent X to ≥ Y, or widen our constraint to `^Z` (a manual decision).
+And state the concrete fix: e.g. `composer update <pkg>` (flags per Step 7), `npm update <pkg>`, `npm audit fix` (never `--force`), bump parent X to ≥ Y, or widen our constraint to `^Z` (a manual decision).
 
 ## Step 4 — Classify PRs
 
 - **SAFE** — CI green, and the diff only touches code paths this codebase doesn't use, or is dev-only tooling, or is a bugfix whose corrected behavior we already expect. Patch bumps of GitHub Actions with no workflow-relevant changes qualify.
 - **REVIEW** — changes behavior in code paths we use (even if likely compatible), changes config defaults, or deprecates something we use. Name the affected files/usages and what to verify.
 - **RISKY** — major bump, documented breaking changes touching our usage, required config/migration steps, or failing CI. Never merged by this skill without explicit confirmation; list the follow-up work.
+
+**No CI evidence is not green.** A PR with no CI run (no checks configured, or none reported) can never be SAFE — it is REVIEW at best, with "no CI — unverified" as the stated reason and CI shown as `none` in the report.
 
 **SECURITY** is a tag, not a verdict: a SECURITY PR keeps its SAFE/REVIEW/RISKY verdict, but goes first in the report, and a high/critical SECURITY PR at REVIEW should be recommended for merge after the named verification.
 
@@ -185,7 +197,7 @@ In this order:
    ````
    (`safe`/`review`/`risky`/`security` are lists of PR numbers.)
 
-If no action was requested, end by asking which PRs to merge (recommend "all SAFE + SECURITY") and whether to open fix PRs for UNCOVERED vulnerabilities that have a patched version. When run by the cockpit, skip the question — the cockpit asks once for all repos.
+If no action was requested, end by asking which PRs to merge (recommend "all SAFE + CI-verified SECURITY"; list PRs without CI separately as unverified) and whether to open fix PRs for UNCOVERED vulnerabilities that have a patched version. When run by the cockpit, skip the question — the cockpit asks once for all repos.
 
 ## Step 6 — Merge (only when instructed)
 
@@ -198,7 +210,21 @@ gh pr merge <n> -R "$SLUG" --squash   # or --merge / --rebase per repo settings 
 
 - Merge only SAFE PRs, or PRs the user named regardless of verdict — for a named RISKY PR, confirm once first.
 - After a merge, Dependabot rebases the others. If a later merge fails because the branch is behind/conflicting, comment `@dependabot rebase` on it (`gh pr comment <n> -R "$SLUG" --body "@dependabot rebase"`) and report it as **deferred** — don't retry in the same run.
-- Report merged / skipped / deferred.
+- **Lockfile PRs must be validated against the current base.** Two PRs that each pass alone can merge without a textual conflict and still leave a broken lockfile. Before merging a lockfile PR whose branch is not based on the current `origin/$BASE` head (re-fetch after every merge), either comment `@dependabot rebase` and wait for the rebased branch, or simulate the merge and validate the result:
+  ```bash
+  TREE=$(git -C "$REPO_DIR" merge-tree --write-tree "origin/${BASE}" <head-sha>)   # non-zero exit = conflict → rebase instead
+  V=$(mktemp -d)
+  for f in composer.json composer.lock package.json package-lock.json; do
+    git -C "$REPO_DIR" cat-file -e "${TREE}:${DIR}${f}" 2>/dev/null && git -C "$REPO_DIR" show "${TREE}:${DIR}${f}" > "$V/$f"
+  done
+  ( cd "$V" && composer validate --no-check-publish && composer install --dry-run --no-scripts --no-plugins && composer audit --locked --no-plugins )   # composer
+  ( cd "$V" && npm ci --dry-run )                                                                                              # npm
+  ```
+  Also diff the simulated lockfile against the base's: only the PR's packages (and their expected dependencies) may have moved.
+- After **each** merge, fetch and re-validate the base's manifest + lockfile the same way (from `origin/${BASE}:…`). If validation fails, stop merging in this repo and report it.
+- Several npm PRs touching the same lockfile, or packages that must land together (a multi-package family released in lockstep): prefer one combined PR with a freshly generated lockfile (Step 7 mechanics) over merging them one by one.
+- **Unverified merges** — PRs without CI evidence merged on the user's instruction: merge them in small groups (≈5, related packages together) with the validation above between groups, not one long batch, and state in the outcome that the base **needs a test run** before it is trusted or deployed, listing the unverified PRs.
+- Report merged / skipped / deferred, and whether a test run is owed.
 
 ## Step 7 — Fix uncovered vulnerabilities (only when instructed)
 
@@ -209,10 +235,19 @@ STAMP=$(date +%Y%m%d)
 WT="$(mktemp -d)/wt"
 git -C "$REPO_DIR" worktree add -b "chore/security-$STAMP" "$WT" "origin/$BASE"
 cd "$WT"
-composer update <pkg>... --with-dependencies --no-install --no-scripts   # composer: lockfile only
+composer update <pkg>... --no-install --no-scripts                       # composer: lockfile only — try this plain form first
 npm update <pkg>... --package-lock-only                                  # npm direct
 npm audit fix --package-lock-only                                        # npm transitive (never --force)
 ```
+
+(An independent temp clone of the repo's origin works as well as a worktree — use one when the caller says worktrees are unsuitable on this machine.)
+
+Make the smallest change that fixes the advisory:
+
+- Composer: add `--with-dependencies --minimal-changes` only if the plain update can't resolve. When a parent allows a newer major, keep the package on its current major line with `--with <pkg>:<constraint>` (e.g. `--with symfony/http-foundation:^7.4`).
+- npm: same spirit — lockfile-only commands (`npm update <pkg> --package-lock-only`, `npm install --package-lock-only`), then review what moved.
+- **Always read the lockfile diff** (old → new version per package). Reject and retry narrower if it moves unrelated packages, crosses a major version, or downgrades anything.
+- A newer local Composer may add `published-time` fields or bump `plugin-api-version` in `composer.lock`; don't fight it — mention it in the PR body.
 
 1. Re-run the Step 1b audit inside `$WT` — confirm the advisories are gone and nothing new appeared. Check `git diff --stat` — the lockfile should be the only change (plus `composer.json`/`package.json` only if the user approved a constraint change).
 2. Commit (`chore(deps): security update <pkgs> (<GHSA/CVE ids>)`), push, open the PR against `$BASE` with a body listing each advisory, old → new version, and anything left unfixed. Add a `dependencies` / `security` label only if it already exists in the repo.
@@ -222,4 +257,5 @@ npm audit fix --package-lock-only                                        # npm t
 ## Notes
 
 - Don't run the test suite locally — verdicts rely on CI plus diff analysis. Local verification of a REVIEW PR is a separate follow-up.
-- Repos with `composer.json` `"type": "library"`: a vulnerable lockfile entry is CI/dev exposure only; also check whether our `require` constraints *allow* consumers to resolve to a fixed version — that is the real consumer-facing issue.
+- Repos with `composer.json` `"type": "library"`: a vulnerable lockfile entry is CI/dev exposure only; also check whether our `require` constraints *allow* consumers to resolve to a fixed version — that is the real consumer-facing issue. Without a committed lockfile, use the throwaway-lockfile audit from Step 1b.
+- Dismissing an alert: when no patched version exists (or a parent pins the vulnerable version) **and** the package is dev/build-time only, the right outcome may be dismissing the Dependabot alert as tolerable risk with a comment explaining why. Offer it as an option; do it only when the user picks it — never automatically.
